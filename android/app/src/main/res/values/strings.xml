@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">手机助手</string>
+    <string name="accessibility_desc">允许手机助手读取屏幕内容并执行操作</string>
+    <string name="input_hint">例如：打开微信发消息给张三</string>
+    <string name="start_task">执行</string>
+    <string name="cancel_task">取消</string>
+    <string name="service_off">无障碍服务未开启</string>
+    <string name="service_on">服务已就绪</string>
+    <string name="confirm_execute">允许</string>
+    <string name="reject">取消</string>
+    <string name="dangerous_warning">此操作涉及敏感功能，请确认是您本人的意图</string>
+</resources>

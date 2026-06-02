@@ -1,0 +1,24 @@
+# Android
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+
+# Python（如果有）
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+
+# IDE
+*.swp
+*.swo
+*~
