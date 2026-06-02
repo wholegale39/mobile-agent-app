@@ -29,12 +29,23 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
 
       - name: Build APK
+        id: build
         working-directory: ./android
-        run: gradle assembleDebug --no-daemon
+        run: |
+          gradle assembleDebug --no-daemon 2>&1 | tee /tmp/build.log
+          echo "EXIT_CODE=$?" >> $GITHUB_OUTPUT
+
+      - name: Show errors
+        if: always()
+        run: |
+          echo "=== BUILD LOG ==="
+          grep -E "error:|FAILED|BUILD FAILED|What went wrong|Exception" /tmp/build.log || echo "No error patterns found"
+          echo "=== LAST 20 LINES ==="
+          tail -20 /tmp/build.log
 
       - name: Upload APK
+        if: steps.build.outputs.EXIT_CODE == '0'
         uses: actions/upload-artifact@v4
         with:
           name: agent-app-debug
           path: android/**/*.apk
-          if-no-files-found: warn
