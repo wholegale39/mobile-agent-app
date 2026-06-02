@@ -7,7 +7,6 @@ on:
 
 env:
   ANDROID_HOME: /usr/local/lib/android/sdk
-  GRADLE_VERSION: 8.11.1
 
 jobs:
   build:
@@ -24,20 +23,26 @@ jobs:
 
       - name: Install Gradle
         run: |
-          wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
-          unzip -q "gradle-${GRADLE_VERSION}-bin.zip"
-          echo "${PWD}/gradle-${GRADLE_VERSION}/bin" >> $GITHUB_PATH
+          wget -q "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip"
+          unzip -q "gradle-8.10.2-bin.zip"
+          echo "${PWD}/gradle-8.10.2/bin" >> $GITHUB_PATH
 
-      - name: Accept Android Licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+      - name: Install Android SDK
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
 
       - name: Build APK
+        id: build
         working-directory: ./android
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee gradle.log
+
+      - name: Show errors
+        if: failure()
+        run: grep -A5 "error:\|FAILED\|Exception" gradle.log || echo "No matching patterns found"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: agent-app-debug
           path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
