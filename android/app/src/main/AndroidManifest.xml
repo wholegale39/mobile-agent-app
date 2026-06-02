@@ -9,7 +9,7 @@
 
     <application
         android:name=".AgentApp"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/ic_menu_compass"
         android:label="手机助手"
         android:theme="@style/Theme.Material3.DayNight.NoActionBar">
 
