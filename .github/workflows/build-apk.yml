@@ -7,6 +7,7 @@ on:
 
 env:
   ANDROID_HOME: /usr/local/lib/android/sdk
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
 jobs:
   build:
@@ -20,17 +21,16 @@ jobs:
         with:
           java-version: 17
           distribution: temurin
+          cache: gradle
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.11.1
-
-      - name: Accept licenses
+      - name: Accept Android Licenses
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
 
-      - name: Build APK
-        run: cd android && gradle assembleDebug --no-daemon --stacktrace
+      - name: Build with Gradle
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
