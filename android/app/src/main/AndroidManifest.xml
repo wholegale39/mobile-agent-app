@@ -11,7 +11,7 @@
         android:name=".AgentApp"
         android:icon="@android:drawable/ic_menu_compass"
         android:label="手机助手"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.AgentApp">
 
         <!-- 主界面 -->
         <activity
@@ -35,7 +35,7 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=".confirm"
-            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+            android:theme="@style/Theme.AgentApp" />
 
         <!-- 无障碍服务（核心） -->
         <service
