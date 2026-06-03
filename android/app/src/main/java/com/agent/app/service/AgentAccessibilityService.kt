@@ -78,8 +78,8 @@ class AgentAccessibilityService : AccessibilityService() {
         val focused = findFocused(root)
         if (focused != null && focused.isEditable) {
             if (clearFirst) {
-                focused.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SELECT_ALL)
-                focused.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CUT)
+                focused.performAction(0x00001000) // ACTION_SELECT_ALL
+                focused.performAction(0x00001002) // ACTION_CUT
             }
             val args = android.os.Bundle()
             args.putCharSequence(
