@@ -1,28 +1,19 @@
 package com.agent.app
 
 import android.app.Application
-import android.app.NotificationChannel
-import android.app.NotificationManager
+import android.util.Log
 
 class AgentApp : Application() {
     override fun onCreate() {
-        super.onCreate()
-        createNotificationChannel()
-    }
-
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "手机助手",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "后台服务运行通知"
+        try {
+            super.onCreate()
+            Log.d(TAG, "AgentApp started")
+        } catch (e: Exception) {
+            Log.e(TAG, "AgentApp init failed", e)
         }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
     }
 
     companion object {
-        const val CHANNEL_ID = "agent_foreground"
+        private const val TAG = "AgentApp"
     }
 }
