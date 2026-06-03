@@ -18,19 +18,18 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Install Gradle
-        run: |
-          curl -sLO "https://services.gradle.org/distributions/gradle-8.11.1-bin.zip"
-          unzip -q "gradle-8.11.1-bin.zip"
-          echo "$PWD/gradle-8.11.1/bin" >> $GITHUB_PATH
-
       - name: Setup Android SDK
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" > /dev/null 2>&1 || true
 
       - name: Build APK
         working-directory: ./android
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          curl -sLO "https://services.gradle.org/distributions/gradle-8.11.1-bin.zip"
+          unzip -q "gradle-8.11.1-bin.zip"
+          GRADLE_HOME="$PWD/gradle-8.11.1"
+          $GRADLE_HOME/bin/gradle wrapper --gradle-version 8.11.1
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
