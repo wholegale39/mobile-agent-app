@@ -120,7 +120,7 @@ class LlmClient(
             model = model,
             messages = messages,
             maxTokens = 10,
-            temperature = 0
+            temperature = 0.0
         )
 
         val json = gson.toJson(requestBody)

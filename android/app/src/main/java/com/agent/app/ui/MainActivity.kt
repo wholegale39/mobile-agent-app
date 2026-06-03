@@ -93,7 +93,7 @@ fun MainScreen() {
     val mediaProjectionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == RESULT_OK && result.data != null) {
+        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
             val intent = Intent(context, ScreenCaptureService::class.java).apply {
                 putExtra("result_code", result.resultCode)
                 putExtra("result_data", result.data)
