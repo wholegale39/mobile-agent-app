@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.util.Log
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
@@ -86,6 +87,7 @@ fun MainScreen() {
             addAction(AgentAccessibilityService.ACTION_SERVICE_CONNECTED)
             addAction(AgentAccessibilityService.ACTION_SERVICE_DISCONNECTED)
         }
+        Log.d("AgentFix", "registerReceiver fix applied")  // [验证标记]
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
