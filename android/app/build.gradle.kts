@@ -49,7 +49,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
 
     // Material Components（提供 Material3 XML 主题）
-    implementation("com.google.android.material:material:1.12.0")
+    implementation("com.google.android.material:material:1.11.0")
 
     // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
