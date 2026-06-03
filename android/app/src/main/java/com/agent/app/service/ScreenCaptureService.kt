@@ -16,7 +16,6 @@ import android.os.IBinder
 import android.util.Base64
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.agent.app.AgentApp
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
@@ -96,7 +95,7 @@ class ScreenCaptureService : Service() {
         return bitmap
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, AgentApp.CHANNEL_ID)
+    private fun buildNotification() = NotificationCompat.Builder(this, "agent_foreground")
         .setContentTitle("手机助手运行中")
         .setContentText("可随时执行自动化任务")
         .setSmallIcon(android.R.drawable.ic_menu_compass)
