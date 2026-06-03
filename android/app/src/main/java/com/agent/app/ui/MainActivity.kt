@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
@@ -85,7 +86,7 @@ fun MainScreen() {
             addAction(AgentAccessibilityService.ACTION_SERVICE_CONNECTED)
             addAction(AgentAccessibilityService.ACTION_SERVICE_DISCONNECTED)
         }
-        context.registerReceiver(receiver, filter)
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         onDispose { context.unregisterReceiver(receiver) }
     }
 
