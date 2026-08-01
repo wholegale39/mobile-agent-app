@@ -30,7 +30,48 @@ class LlmClient(
     private val jsonType = "application/json".toMediaType()
 
     /**
+     * 先生成总体计划（reasoning 模式）— 纯文本，不传截图，省 token。
+     * 失败返回 null（降级为逐步执行）。
+     */
+    suspend fun planTask(instruction: String): TaskPlan? = withContext(Dispatchers.IO) {
+        val messages = listOf(
+            Message("system", listOf(Content("text", PLAN_PROMPT))),
+            Message("user", listOf(Content("text", "任务：$instruction")))
+        )
+
+        val requestBody = ChatRequest(
+            model = model,
+            messages = messages,
+            maxTokens = 1024,
+            temperature = 0.1,
+            responseFormat = ResponseFormat("json_object")
+        )
+
+        try {
+            val json = gson.toJson(requestBody)
+            val body = json.toRequestBody(jsonType)
+            val request = Request.Builder()
+                .url("$baseUrl/chat/completions")
+                .header("Authorization", "Bearer $apiKey")
+                .post(body)
+                .build()
+            val response = client.newCall(request).execute()
+            val chatResponse = gson.fromJson(response.body?.string(), ChatResponse::class.java)
+            val content = chatResponse.choices?.firstOrNull()?.message?.content ?: ""
+            val jsonStart = content.indexOf('{')
+            val jsonEnd = content.lastIndexOf('}') + 1
+            if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                val plan = gson.fromJson(content.substring(jsonStart, jsonEnd), TaskPlan::class.java)
+                if (plan.steps.isNotEmpty()) plan else null
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
      * 分析截图 + UI 树 → 决定下一步操作
+     * @param plan 可选：总体计划摘要（reasoning 模式），帮助 agent 不跑偏
      */
     suspend fun decideNextStep(
         systemPrompt: String,
@@ -38,7 +79,8 @@ class LlmClient(
         screenshotBase64: String,
         uiTreeSummary: String,
         history: List<StepRecord>,
-        lastResult: String? = null
+        lastResult: String? = null,
+        plan: String? = null
     ): StepDecision = withContext(Dispatchers.IO) {
 
         // 构建消息
@@ -48,7 +90,7 @@ class LlmClient(
 
         // 用户消息（文字 + 图片）
         val userParts = mutableListOf(
-            Content("text", buildUserPrompt(instruction, uiTreeSummary, history, lastResult)),
+            Content("text", buildUserPrompt(instruction, uiTreeSummary, history, lastResult, plan)),
             Content("image_url", imageUrl = ImageUrl("data:image/jpeg;base64,$screenshotBase64"))
         )
         messages.add(Message("user", userParts))
@@ -142,10 +184,16 @@ class LlmClient(
         instruction: String,
         uiTree: String,
         history: List<StepRecord>,
-        lastResult: String?
+        lastResult: String?,
+        plan: String? = null
     ): String {
         val sb = StringBuilder()
         sb.appendLine("【任务】$instruction\n")
+
+        if (plan != null) {
+            sb.appendLine("【总体计划参考】\n$plan\n")
+            sb.appendLine("（计划仅供参考，以实际界面为准，不要死板执行）\n")
+        }
 
         if (history.isEmpty()) {
             sb.appendLine("（这是第一步，尚无历史操作）")
@@ -175,8 +223,28 @@ class LlmClient(
             |}
         """.trimMargin())
 
-        sb.appendLine("\n【界面元素】\n$uiTree")
+        // vision-only 兜底：UI 树无可交互元素时，提示仅凭截图判断
+        if (uiTree.isBlank() || uiTree == "（无可交互元素）") {
+            sb.appendLine("\n【界面元素】无有效 UI 树（该应用可能不支持无障碍树），请仅根据截图视觉判断操作。")
+        } else {
+            sb.appendLine("\n【界面元素】\n$uiTree")
+        }
         return sb.toString()
+    }
+
+    companion object {
+        private const val PLAN_PROMPT = """你是手机操作规划器。分析任务，先给出 3-10 步的总体操作计划。
+每步描述：要做什么操作、期望的界面结果。不要执行，只规划。
+不确定的步骤写保守做法。
+
+输出严格 JSON：
+{
+  "goal": "任务目标一句话",
+  "steps": [
+    {"step": 1, "action_desc": "打开微信", "expected_result": "微信首页显示"},
+    {"step": 2, "action_desc": "进入设置", "expected_result": "设置页显示"}
+  ]
+}"""
     }
 }
 
@@ -234,6 +302,20 @@ data class StepDecision(
     val action: Action? = null,
     val status: String = "in_progress",
     @SerializedName("user_message") val userMessage: String? = null
+)
+
+/**
+ * 总体计划（reasoning 模式）
+ */
+data class TaskPlan(
+    val goal: String = "",
+    val steps: List<PlanStep> = emptyList()
+)
+
+data class PlanStep(
+    val step: Int = 0,
+    @SerializedName("action_desc") val actionDesc: String = "",
+    @SerializedName("expected_result") val expectedResult: String = ""
 )
 
 data class Action(

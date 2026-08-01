@@ -47,6 +47,23 @@ class AgentEngine(
                     return@launch
                 }
 
+                // 1b. reasoning 模式：先生成总体计划（失败降级为逐步执行）
+                var planSummary: String? = null
+                try {
+                    val plan = llmClient.planTask(instruction)
+                    if (plan != null && plan.steps.isNotEmpty()) {
+                        planSummary = buildString {
+                            appendLine("目标：${plan.goal}")
+                            plan.steps.forEach {
+                                appendLine("  ${it.step}. ${it.actionDesc} → ${it.expectedResult}")
+                            }
+                        }
+                        onStatus?.invoke("planned", "已生成计划（${plan.steps.size} 步）")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "规划失败，降级为逐步执行: ${e.message}")
+                }
+
                 // 2. 主循环
                 history.clear()
                 var stepCount = 0
@@ -64,7 +81,7 @@ class AgentEngine(
                         return@launch
                     }
 
-                    // 2b. 获取 UI 树
+                    // 2b. 获取 UI 树（vision-only 兜底：空树时提示 LLM 仅凭截图）
                     val uiTree = accessibilityService.getUiTreeSummary()
 
                     // 2c. 调 LLM 决策
@@ -78,7 +95,8 @@ class AgentEngine(
                         screenshotBase64 = screenshot,
                         uiTreeSummary = uiTree,
                         history = history.toList(),
-                        lastResult = lastResult
+                        lastResult = lastResult,
+                        plan = planSummary
                     )
 
                     // 2d. 检查状态
