@@ -1,9 +1,11 @@
 package com.agent.app.ui
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import android.media.projection.MediaProjectionManager
@@ -25,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.agent.app.api.Action
 import com.agent.app.api.LlmClient
 import com.agent.app.api.StepRecord
@@ -32,6 +35,7 @@ import com.agent.app.data.MemoryEngine
 import com.agent.app.service.AgentAccessibilityService
 import com.agent.app.service.AgentEngine
 import com.agent.app.service.ScreenCaptureService
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -58,7 +62,8 @@ fun MainScreen() {
     var currentStep by remember { mutableStateOf(0) }
     var statusMessage by remember { mutableStateOf("") }
     var isRunning by remember { mutableStateOf(false) }
-    val history = remember { mutableListOf<String>() }
+    val history = remember { mutableStateListOf<String>() }
+    var activeEngine by remember { mutableStateOf<AgentEngine?>(null) }
     var showConfirmDialog by remember { mutableStateOf(false) }
     var pendingAction by remember { mutableStateOf<Action?>(null) }
     var pendingReason by remember { mutableStateOf("") }
@@ -96,6 +101,20 @@ fun MainScreen() {
         onDispose { context.unregisterReceiver(receiver) }
     }
 
+    // ── 通知权限（Android 13+）──
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     // ── 截图授权 Launcher ──
     val mediaProjectionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -108,17 +127,6 @@ fun MainScreen() {
             context.startForegroundService(intent)
             connectionStatus = "截图已授权"
         }
-    }
-
-    // ── Agent Engine 初始化 ──
-    val engine = remember {
-        val prefs = context.getSharedPreferences("agent_config", Context.MODE_PRIVATE)
-        val apiKey = prefs.getString("api_key", "") ?: ""
-        val baseUrl = prefs.getString("api_base_url", "https://api.openai.com/v1") ?: ""
-        val model = prefs.getString("model", "gpt-4o") ?: "gpt-4o"
-
-        // 实际初始化在点击执行时完成
-        null as AgentEngine?
     }
 
     // ── 界面 ──
@@ -193,15 +201,27 @@ fun MainScreen() {
                         statusMessage = "正在执行…"
 
                         scope.launch {
-                            runAgent(context, inputText) { step, msg, done, success ->
-                                currentStep = step
-                                statusMessage = msg
-                                if (done) {
-                                    isRunning = false
-                                    history.add(0, "${if (success) "✅" else "❌"} ${inputText.take(30)} — $msg")
-                                    inputText = ""
+                            val engine = runAgent(
+                                context = context,
+                                instruction = inputText,
+                                onNeedConfirm = { action, reason, callback ->
+                                    pendingAction = action
+                                    pendingReason = reason
+                                    onConfirmResult = callback
+                                    showConfirmDialog = true
+                                },
+                                onUpdate = { step, msg, done, success ->
+                                    currentStep = step
+                                    statusMessage = msg
+                                    if (done) {
+                                        isRunning = false
+                                        activeEngine = null
+                                        history.add(0, "${if (success) "✅" else "❌"} ${inputText.take(30)} — $msg")
+                                        inputText = ""
+                                    }
                                 }
-                            }
+                            )
+                            activeEngine = engine
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -236,6 +256,8 @@ fun MainScreen() {
                         Spacer(Modifier.height(12.dp))
                         OutlinedButton(
                             onClick = {
+                                activeEngine?.cancel()
+                                activeEngine = null
                                 isRunning = false
                                 statusMessage = "已取消"
                             },
@@ -365,26 +387,45 @@ fun describeAction(action: Action): String = when (action.type) {
 }
 
 /**
- * 运行 Agent（协程）
+ * 运行 Agent（协程）— 接入 AgentEngine 完整链路
+ * @return 活跃的 AgentEngine（可用于取消），失败返回 null
  */
 suspend fun runAgent(
     context: Context,
     instruction: String,
+    onNeedConfirm: (Action, String, (Boolean) -> Unit) -> Unit,
     onUpdate: (step: Int, message: String, done: Boolean, success: Boolean) -> Unit
-) {
+): AgentEngine? {
     // 读取配置
     val prefs = context.getSharedPreferences("agent_config", Context.MODE_PRIVATE)
     val apiKey = prefs.getString("api_key", "") ?: ""
     val baseUrl = prefs.getString("api_base_url", "https://api.openai.com/v1") ?: ""
     val model = prefs.getString("model", "gpt-4o") ?: "gpt-4o"
 
-    val llmClient = LlmClient(apiKey, baseUrl, model)
-    val memoryEngine = MemoryEngine(context)
+    val accService = AgentAccessibilityService.instance
+    val capService = ScreenCaptureService.instance
+    if (accService == null || capService == null) {
+        onUpdate(0, "服务未就绪：请确认无障碍服务已开启、截图已授权", true, false)
+        return null
+    }
+    if (apiKey.isBlank()) {
+        onUpdate(0, "未配置 API Key，请到设置中填写", true, false)
+        return null
+    }
+
+    val engine = AgentEngine(
+        accessibilityService = accService,
+        captureService = capService,
+        llmClient = LlmClient(apiKey, baseUrl, model),
+        memoryEngine = MemoryEngine(context)
+    )
+
+    engine.onStep = { step, desc -> onUpdate(step, desc, false, false) }
+    engine.onStatus = { _, msg -> onUpdate(0, msg, false, false) }
+    engine.onNeedConfirm = { action, reason, callback -> onNeedConfirm(action, reason, callback) }
+    engine.onComplete = { success, msg -> onUpdate(0, msg, true, success) }
 
     onUpdate(0, "初始化…", false, false)
-
-    // 这里需要获取 AgentAccessibilityService 和 ScreenCaptureService 实例
-    // 实际实现中需要通过 Application 持有或依赖注入
-    // 简化实现：这部分在实际编译时需要补全
-    onUpdate(0, "需要补全服务引用", true, false)
+    engine.execute(instruction)
+    return engine
 }

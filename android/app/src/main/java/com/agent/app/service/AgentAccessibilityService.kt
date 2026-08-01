@@ -22,6 +22,7 @@ class AgentAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         Log.d(TAG, "✅ 无障碍服务已连接")
         // 通知 UI
         sendBroadcast(Intent(ACTION_SERVICE_CONNECTED))
@@ -178,6 +179,7 @@ class AgentAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        instance = null
         sendBroadcast(Intent(ACTION_SERVICE_DISCONNECTED))
         super.onDestroy()
     }
@@ -186,6 +188,11 @@ class AgentAccessibilityService : AccessibilityService() {
         private const val TAG = "AgentAccessibilityService"
         const val ACTION_SERVICE_CONNECTED = "com.agent.app.SERVICE_CONNECTED"
         const val ACTION_SERVICE_DISCONNECTED = "com.agent.app.SERVICE_DISCONNECTED"
+
+        /** 当前活跃服务实例（onServiceConnected 后可用） */
+        @Volatile
+        var instance: AgentAccessibilityService? = null
+            private set
 
         fun isEnabled(context: android.content.Context): Boolean {
             val serviceStr = android.provider.Settings.Secure.getString(

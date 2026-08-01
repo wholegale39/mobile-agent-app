@@ -24,7 +24,7 @@ class AgentEngine(
     // 状态回调
     var onStatus: ((String, String) -> Unit)? = null          // (status, message)
     var onStep: ((Int, String) -> Unit)? = null               // (step, description)
-    var onNeedConfirm: ((Action, String, suspend (Boolean) -> Unit) -> Unit)? = null
+    var onNeedConfirm: ((Action, String, (Boolean) -> Unit) -> Unit)? = null
     var onComplete: ((Boolean, String) -> Unit)? = null       // (success, message)
 
     private val history = mutableListOf<StepRecord>()
@@ -176,7 +176,7 @@ class AgentEngine(
         onComplete?.invoke(true, "快捷路径完成")
     }
 
-    private fun executeAction(action: Action) {
+    private suspend fun executeAction(action: Action) {
         Log.d(TAG, "执行: ${action.type} | text=${action.text} | x=${action.x} y=${action.y}")
         when (action.type) {
             "click" -> action.x?.let { x -> action.y?.let { y -> accessibilityService.click(x, y) } }
@@ -196,7 +196,7 @@ class AgentEngine(
             "home" -> accessibilityService.goHome()
             "recents" -> accessibilityService.goRecents()
             "scroll" -> action.scrollDirection?.let { accessibilityService.scroll(it) }
-            "wait" -> Thread.sleep(action.waitMs?.toLong() ?: 2000)
+            "wait" -> delay(action.waitMs?.toLong() ?: 2000)
         }
     }
 

@@ -32,6 +32,8 @@ class ScreenCaptureService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
+        createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         val thread = HandlerThread("ScreenCapture")
         thread.start()
@@ -90,12 +92,29 @@ class ScreenCaptureService : Service() {
         val buffer: ByteBuffer = image.planes[0].buffer
         val bytes = ByteArray(buffer.remaining())
         buffer.get(bytes)
+        // ImageReader 使用 PixelFormat.RGBA_8888，需交换 R/B 通道转换为 ARGB_8888
         val bitmap = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
+        for (i in bytes.indices step 4) {
+            val r = bytes[i]
+            bytes[i] = bytes[i + 2]
+            bytes[i + 2] = r
+        }
         bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(bytes))
         return bitmap
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, "agent_foreground")
+    private fun createNotificationChannel() {
+        val channel = android.app.NotificationChannel(
+            CHANNEL_ID, "手机助手前台服务",
+            android.app.NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "运行自动化任务时的前台服务通知"
+        }
+        getSystemService(android.app.NotificationManager::class.java)
+            .createNotificationChannel(channel)
+    }
+
+    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setContentTitle("手机助手运行中")
         .setContentText("可随时执行自动化任务")
         .setSmallIcon(android.R.drawable.ic_menu_compass)
@@ -106,6 +125,7 @@ class ScreenCaptureService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        instance = null
         imageReader?.close()
         mediaProjection?.stop()
         super.onDestroy()
@@ -114,5 +134,11 @@ class ScreenCaptureService : Service() {
     companion object {
         private const val TAG = "ScreenCaptureService"
         private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "agent_foreground"
+
+        /** 当前活跃服务实例（startForegroundService 后可用） */
+        @Volatile
+        var instance: ScreenCaptureService? = null
+            private set
     }
 }
