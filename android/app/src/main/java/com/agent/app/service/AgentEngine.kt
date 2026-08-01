@@ -121,8 +121,8 @@ class AgentEngine(
                     // 2f. 执行操作
                     executeAction(action)
 
-                    // 2g. 等待界面变化
-                    delay(1500)
+                    // 2g. 等待界面稳定（settle）——不再用固定 delay
+                    waitForSettle(timeoutMs = 5000)
 
                     // 2h. 记录历史
                     history.add(StepRecord(
@@ -176,10 +176,33 @@ class AgentEngine(
         onComplete?.invoke(true, "快捷路径完成")
     }
 
+    /**
+     * settle 等待：轮询 UI 树签名直到连续两次一致（界面稳定）或超时。
+     * 比固定 delay 更快、更可靠。
+     */
+    private suspend fun waitForSettle(timeoutMs: Long = 5000, stableRounds: Int = 2) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var lastSig: String? = null
+        var stableCount = 0
+        while (System.currentTimeMillis() < deadline) {
+            val sig = accessibilityService.getUiTreeSignature()
+            if (sig == lastSig) {
+                stableCount++
+                if (stableCount >= stableRounds) return  // 界面已稳定
+            } else {
+                stableCount = 0
+            }
+            lastSig = sig
+            delay(400)
+        }
+        Log.d(TAG, "waitForSettle: 超时 ${timeoutMs}ms，界面未完全稳定，继续")
+    }
+
     private suspend fun executeAction(action: Action) {
         Log.d(TAG, "执行: ${action.type} | text=${action.text} | x=${action.x} y=${action.y}")
         when (action.type) {
             "click" -> action.x?.let { x -> action.y?.let { y -> accessibilityService.click(x, y) } }
+            "click_ref" -> action.ref?.let { accessibilityService.clickByRef(it) {} }
             "click_text" -> action.text?.let { accessibilityService.clickByText(it) {} }
             "long_press" -> action.x?.let { x -> action.y?.let { y ->
                 accessibilityService.longPress(x, y, action.waitMs ?: 1000)
@@ -202,6 +225,7 @@ class AgentEngine(
 
     private fun describeAction(action: Action): String = when (action.type) {
         "click" -> "点击(${action.x}, ${action.y})"
+        "click_ref" -> "点击元素${action.ref}"
         "click_text" -> "点击「${action.text}」"
         "swipe" -> "滑动 ${action.x1},${action.y1} → ${action.x2},${action.y2}"
         "input" -> "输入「${action.text}」"
@@ -232,7 +256,10 @@ class AgentEngine(
 每次只做一个操作，等界面变化后再做下一步。
 不确定时选保守做法。
 
+界面元素列表每行带 ref（如 @e3），优先用 ref 操作，ref 比坐标稳定。
+
 动作：
+- click_ref(ref) — 点击指定 ref 的元素（首选）
 - click(x, y)
 - click_text(text) — 点击有该文字的元素
 - swipe(x1,y1,x2,y2)

@@ -165,10 +165,11 @@ class LlmClient(
             |
             |请分析当前截图和界面元素，决定下一步操作。
             |一次只做一个操作。
+            |界面元素每行带 ref（如 @e3），优先用 {"type": "click_ref", "ref": "@e3"}，ref 比坐标稳定。
             |输出 JSON 格式：
             |{
             |  "step_reasoning": "为什么做这步",
-            |  "action": {"type": "click|swipe|input|back|home|wait|scroll", ...},
+            |  "action": {"type": "click_ref|click|click_text|swipe|input|back|home|wait|scroll", ...},
             |  "status": "in_progress|completed|failed",
             |  "user_message": "给用户看的进度提示"
             |}
@@ -246,7 +247,8 @@ data class Action(
     val y2: Int? = null,
     @SerializedName("direction") val scrollDirection: String? = null,
     @SerializedName("distance_percent") val scrollDistance: Double? = null,
-    @SerializedName("ms") val waitMs: Int? = null
+    @SerializedName("ms") val waitMs: Int? = null,
+    @SerializedName("ref") val ref: String? = null
 )
 
 /**

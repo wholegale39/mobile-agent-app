@@ -20,6 +20,16 @@ class AgentAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     var onActionResult: ((Boolean, String?) -> Unit)? = null
 
+    /** ref -> 元素快照，每次 getUiTreeSummary() 重建 */
+    private val elementRefs = mutableMapOf<String, ElementSnapshot>()
+
+    data class ElementSnapshot(
+        val label: String,
+        val centerX: Int,
+        val centerY: Int,
+        val tags: String
+    )
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -53,6 +63,23 @@ class AgentAccessibilityService : AccessibilityService() {
             return
         }
         callback(findAndClick(root, text))
+    }
+
+    /**
+     * 通过 ref（如 @e3）点击元素。
+     * ref 只对最近一次 getUiTreeSummary() 有效（agent-device 同款原则）。
+     */
+    fun clickByRef(ref: String, callback: (Boolean) -> Unit) {
+        val entry = elementRefs[ref]
+        if (entry == null) {
+            Log.w(TAG, "clickByRef: 无效 ref $ref")
+            callback(false)
+            return
+        }
+        // 用快照坐标点击（避免长期持有 AccessibilityNodeInfo 引用）
+        click(entry.centerX, entry.centerY)
+        Log.d(TAG, "clickByRef($ref) -> (${entry.centerX}, ${entry.centerY})")
+        callback(true)
     }
 
     fun longPress(x: Int, y: Int, durationMs: Int = 1000) {
@@ -114,6 +141,7 @@ class AgentAccessibilityService : AccessibilityService() {
 
     fun getUiTreeSummary(): String {
         val root = rootInActiveWindow ?: return "（无界面）"
+        elementRefs.clear()
         val elements = mutableListOf<String>()
         collectElements(root, elements, 0)
         if (elements.isEmpty()) return "（无可交互元素）"
@@ -140,11 +168,38 @@ class AgentAccessibilityService : AccessibilityService() {
                 if (node.isScrollable) append("可滚动 ")
                 if (node.isEditable) append("可输入 ")
             }
-            result.add("  ${"  ".repeat(depth)}$label @(${bounds.centerX()},${bounds.centerY()}) $tags")
+            val ref = "@e${elementRefs.size + 1}"
+            elementRefs[ref] = ElementSnapshot(label, bounds.centerX(), bounds.centerY(), tags)
+            result.add("  ${ref} $label @(${bounds.centerX()},${bounds.centerY()}) $tags")
         }
 
         for (i in 0 until node.childCount) {
             node.getChild(i)?.let { collectElements(it, result, depth + 1) }
+        }
+    }
+
+    /**
+     * UI 树签名 — 用于 settle 判断界面是否稳定。
+     * 只比较结构，不生成完整摘要（省 token）。
+     */
+    fun getUiTreeSignature(): String {
+        val root = rootInActiveWindow ?: return "empty"
+        val sb = StringBuilder()
+        collectSignature(root, sb, 0)
+        return sb.toString()
+    }
+
+    private fun collectSignature(node: AccessibilityNodeInfo, sb: StringBuilder, depth: Int) {
+        if (depth > 6 || !node.isVisibleToUser) return
+        val text = node.text?.toString()?.take(20) ?: ""
+        val desc = node.contentDescription?.toString()?.take(20) ?: ""
+        if (node.isClickable || node.isScrollable || node.isEditable || text.isNotEmpty()) {
+            val bounds = android.graphics.Rect()
+            node.getBoundsInScreen(bounds)
+            sb.append("${node.className}|$text|$desc|${bounds.centerX()},${bounds.centerY()};")
+        }
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { collectSignature(it, sb, depth + 1) }
         }
     }
 
