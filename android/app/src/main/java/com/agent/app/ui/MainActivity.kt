@@ -28,6 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.agent.app.api.Action
 import com.agent.app.api.LlmClient
 import com.agent.app.api.StepRecord
@@ -99,6 +101,23 @@ fun MainScreen() {
             context.registerReceiver(receiver, filter)
         }
         onDispose { context.unregisterReceiver(receiver) }
+    }
+
+    // ── onResume 重新检查无障碍状态（从系统设置返回时自动刷新） ──
+    val lifecycleObserver = remember {
+        LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val enabled = AgentAccessibilityService.isEnabled(context)
+                serviceEnabled = enabled
+                if (enabled) connectionStatus = "已就绪"
+                Log.d("AgentFix", "onResume 重新检查无障碍: $enabled")
+            }
+        }
+    }
+    DisposableEffect(Unit) {
+        val lifecycle = (context as? ComponentActivity)?.lifecycle
+        lifecycle?.addObserver(lifecycleObserver)
+        onDispose { lifecycle?.removeObserver(lifecycleObserver) }
     }
 
     // ── 通知权限（Android 13+）──
