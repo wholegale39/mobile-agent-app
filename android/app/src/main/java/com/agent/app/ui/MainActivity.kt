@@ -19,6 +19,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ import com.agent.app.data.MemoryEngine
 import com.agent.app.service.AgentAccessibilityService
 import com.agent.app.service.AgentEngine
 import com.agent.app.service.ScreenCaptureService
+import com.agent.app.ui.SettingsActivity
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -168,6 +171,15 @@ fun MainScreen() {
                                    else connectionStatus,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             fontSize = 12.sp
+                        )
+                    }
+                    // 设置入口
+                    IconButton(onClick = {
+                        context.startActivity(Intent(context, SettingsActivity::class.java))
+                    }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "设置"
                         )
                     }
                 }
@@ -419,7 +431,10 @@ suspend fun runAgent(
     val prefs = context.getSharedPreferences("agent_config", Context.MODE_PRIVATE)
     val apiKey = prefs.getString("api_key", "") ?: ""
     val baseUrl = prefs.getString("api_base_url", "https://api.openai.com/v1") ?: ""
-    val model = prefs.getString("model", "gpt-4o") ?: "gpt-4o"
+    val modelCustom = prefs.getString("model_custom", "") ?: ""
+    val model = if (modelCustom.isNotBlank()) modelCustom
+                else prefs.getString("model", "gpt-4o") ?: "gpt-4o"
+    val confirmEachStep = prefs.getBoolean("confirm_each_step", false)
 
     val accService = AgentAccessibilityService.instance
     val capService = ScreenCaptureService.instance
@@ -438,6 +453,7 @@ suspend fun runAgent(
         llmClient = LlmClient(apiKey, baseUrl, model),
         memoryEngine = MemoryEngine(context)
     )
+    engine.confirmEveryStep = confirmEachStep
 
     engine.onStep = { step, desc -> onUpdate(step, desc, false, false) }
     engine.onStatus = { _, msg -> onUpdate(0, msg, false, false) }

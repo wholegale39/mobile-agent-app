@@ -144,6 +144,47 @@ class LlmClient(
     }
 
     /**
+     * 测试连接 — 发一个最小请求验证 Key / 地址 / 模型是否可用
+     * @return (是否成功, 提示信息)
+     */
+    suspend fun testConnection(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank()) return@withContext false to "API Key 为空"
+        try {
+            val messages = listOf(
+                Message("user", listOf(Content("text", "hi")))
+            )
+            val requestBody = ChatRequest(
+                model = model,
+                messages = messages,
+                maxTokens = 5,
+                temperature = 0.0
+            )
+            val json = gson.toJson(requestBody)
+            val body = json.toRequestBody(jsonType)
+            val request = Request.Builder()
+                .url("$baseUrl/chat/completions")
+                .header("Authorization", "Bearer $apiKey")
+                .post(body)
+                .build()
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string() ?: ""
+            if (response.isSuccessful) {
+                val chatResponse = gson.fromJson(responseBody, ChatResponse::class.java)
+                val reply = chatResponse.choices?.firstOrNull()?.message?.content?.take(50)
+                true to ("连接成功，模型响应：${reply ?: "(空)"}")
+            } else {
+                // 提取错误信息
+                val err = try {
+                    gson.fromJson(responseBody, ApiError::class.java)?.message
+                } catch (e: Exception) { null }
+                false to "HTTP ${response.code}${err?.let { ": $it" } ?: ""}"
+            }
+        } catch (e: Exception) {
+            false to (e.message ?: "连接失败")
+        }
+    }
+
+    /**
      * 验证任务是否完成
      */
     suspend fun verifyCompletion(

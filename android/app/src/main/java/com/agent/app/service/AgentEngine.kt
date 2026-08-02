@@ -27,6 +27,9 @@ class AgentEngine(
     var onNeedConfirm: ((Action, String, (Boolean) -> Unit) -> Unit)? = null
     var onComplete: ((Boolean, String) -> Unit)? = null       // (success, message)
 
+    /** 每步都确认（默认 false：仅高危操作确认） */
+    var confirmEveryStep: Boolean = false
+
     private val history = mutableListOf<StepRecord>()
     private val systemPrompt = buildSystemPrompt()
 
@@ -121,12 +124,14 @@ class AgentEngine(
 
                     val action = decision.action ?: continue
 
-                    // 2e. 安全检查
+                    // 2e. 安全检查（confirmEveryStep 开启时每步都确认）
                     val checkResult = checkAction(action)
-                    if (!checkResult.first) {
+                    if (!checkResult.first || confirmEveryStep) {
                         // 需要用户确认
+                        val reason = if (checkResult.first) "执行操作：${describeAction(action)}"
+                                     else checkResult.second
                         val confirmed = CompletableDeferred<Boolean>()
-                        onNeedConfirm?.invoke(action, checkResult.second) { approved ->
+                        onNeedConfirm?.invoke(action, reason) { approved ->
                             confirmed.complete(approved)
                         }
                         if (!confirmed.await()) {
