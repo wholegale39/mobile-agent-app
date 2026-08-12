@@ -125,6 +125,7 @@ fun loadLaunchableApps(context: Context): List<AppInfo> {
 @Composable
 fun AppListScreen(apps: List<AppInfo>, onPick: (AppInfo) -> Unit) {
     var query by remember { mutableStateOf("") }
+    val context = LocalContext.current
     val filtered = remember(apps, query) {
         if (query.isBlank()) apps
         else apps.filter { it.label.contains(query, true) || it.packageName.contains(query, true) }
@@ -135,7 +136,7 @@ fun AppListScreen(apps: List<AppInfo>, onPick: (AppInfo) -> Unit) {
             TopAppBar(
                 title = { Text("📱 已安装应用（${apps.size}）") },
                 navigationIcon = {
-                    IconButton(onClick = { (LocalContext.current as? ComponentActivity)?.finish() }) {
+                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
                         Text("←", fontSize = 20.sp)
                     }
                 }

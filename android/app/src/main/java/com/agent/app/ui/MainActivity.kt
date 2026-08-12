@@ -218,7 +218,7 @@ fun MainScreen() {
             }
             // 2. 有任务 → 交给 Agent 执行
             if (task.isNotBlank()) {
-                startTask("在$appName中：$task")
+                startTask("在${appName}中：$task")
             }
         }
     }
