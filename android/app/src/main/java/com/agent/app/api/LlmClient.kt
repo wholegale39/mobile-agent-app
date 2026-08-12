@@ -258,7 +258,7 @@ class LlmClient(
             |输出 JSON 格式：
             |{
             |  "step_reasoning": "为什么做这步",
-            |  "action": {"type": "click_ref|click|click_text|swipe|input|back|home|wait|scroll", ...},
+            |  "action": {"type": "click_ref|click|click_text|swipe|input|back|home|open_app|wait|scroll", ...},
             |  "status": "in_progress|completed|failed",
             |  "user_message": "给用户看的进度提示"
             |}
@@ -371,7 +371,8 @@ data class Action(
     @SerializedName("direction") val scrollDirection: String? = null,
     @SerializedName("distance_percent") val scrollDistance: Double? = null,
     @SerializedName("ms") val waitMs: Int? = null,
-    @SerializedName("ref") val ref: String? = null
+    @SerializedName("ref") val ref: String? = null,
+    @SerializedName("package_name") val packageName: String? = null
 )
 
 /**

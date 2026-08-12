@@ -29,6 +29,12 @@
             android:name=".ui.SettingsActivity"
             android:exported="false" />
 
+        <!-- 应用列表 -->
+        <activity
+            android:name=".ui.AppListActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- 安全确认界面 -->
         <activity
             android:name=".ui.ConfirmActivity"

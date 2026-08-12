@@ -241,6 +241,7 @@ class AgentEngine(
             "back" -> accessibilityService.goBack()
             "home" -> accessibilityService.goHome()
             "recents" -> accessibilityService.goRecents()
+            "open_app" -> action.packageName?.let { accessibilityService.openApp(it) }
             "scroll" -> action.scrollDirection?.let { accessibilityService.scroll(it) }
             "wait" -> delay(action.waitMs?.toLong() ?: 2000)
         }
@@ -254,6 +255,7 @@ class AgentEngine(
         "input" -> "输入「${action.text}」"
         "back" -> "返回"
         "home" -> "回到桌面"
+        "open_app" -> "打开应用${action.packageName}"
         "scroll" -> "向${action.scrollDirection}滚动"
         "wait" -> "等待${action.waitMs}ms"
         else -> action.type
@@ -288,6 +290,7 @@ class AgentEngine(
 - swipe(x1,y1,x2,y2)
 - input(text) — 输入文字（会先清空）
 - back() / home() / recents()
+- open_app(package_name) — 打开指定应用（如 {"type":"open_app","package_name":"com.tencent.mm"}）
 - scroll(up/down)
 - wait(ms)
 

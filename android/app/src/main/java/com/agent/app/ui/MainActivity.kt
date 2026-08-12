@@ -151,6 +151,78 @@ fun MainScreen() {
         }
     }
 
+    // ── 任务执行入口（按钮 / 应用列表共用） ──
+    fun startTask(task: String) {
+        if (task.isBlank()) return
+        // 检查 API Key
+        val prefs = context.getSharedPreferences("agent_config", Context.MODE_PRIVATE)
+        val apiKey = prefs.getString("api_key", "") ?: ""
+        if (apiKey.isBlank()) {
+            Toast.makeText(context, "请先在设置中输入 API Key", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 请求截图权限（服务已运行时 MediaProjection 授权仍是系统要求，Android 14+ 需重新授权）
+        val mpManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjectionLauncher.launch(mpManager.createScreenCaptureIntent())
+
+        isRunning = true
+        currentStep = 0
+        history.clear()
+        statusMessage = "正在执行…"
+
+        scope.launch {
+            val engine = runAgent(
+                context = context,
+                instruction = task,
+                onNeedConfirm = { action, reason, callback ->
+                    pendingAction = action
+                    pendingReason = reason
+                    onConfirmResult = callback
+                    showConfirmDialog = true
+                },
+                onUpdate = { step, msg, done, success ->
+                    currentStep = step
+                    statusMessage = msg
+                    if (done) {
+                        isRunning = false
+                        activeEngine = null
+                        history.add(0, "${if (success) "✅" else "❌"} ${task.take(30)} — $msg")
+                    }
+                }
+            )
+            activeEngine = engine
+        }
+    }
+
+    // ── 应用列表 Launcher：选应用 → 打开 → （可选）执行任务 ──
+    val appListLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK && result.data != null) {
+            val data = result.data ?: return@rememberLauncherForActivityResult
+            val pkg = data.getStringExtra(AppListActivity.EXTRA_PACKAGE) ?: return@rememberLauncherForActivityResult
+            val appName = data.getStringExtra(AppListActivity.EXTRA_APP_NAME) ?: pkg
+            val task = data.getStringExtra(AppListActivity.EXTRA_TASK) ?: ""
+            // 1. 打开应用
+            try {
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(launchIntent)
+                    connectionStatus = "已打开 $appName"
+                } else {
+                    Toast.makeText(context, "无法打开 $appName（无启动入口）", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "打开 $appName 失败：${e.message}", Toast.LENGTH_SHORT).show()
+            }
+            // 2. 有任务 → 交给 Agent 执行
+            if (task.isNotBlank()) {
+                startTask("在$appName中：$task")
+            }
+        }
+    }
+
     // ── 界面 ──
     Scaffold(
         topBar = {
@@ -212,53 +284,24 @@ fun MainScreen() {
 
                 Button(
                     onClick = {
-                        if (inputText.isBlank()) return@Button
-
-                        // 检查 API Key
-                        val prefs = context.getSharedPreferences("agent_config", Context.MODE_PRIVATE)
-                        val apiKey = prefs.getString("api_key", "") ?: ""
-                        if (apiKey.isBlank()) {
-                            Toast.makeText(context, "请先在设置中输入 API Key", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        // 请求截图权限
-                        val mpManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                        mediaProjectionLauncher.launch(mpManager.createScreenCaptureIntent())
-
-                        isRunning = true
-                        currentStep = 0
-                        history.clear()
-                        statusMessage = "正在执行…"
-
-                        scope.launch {
-                            val engine = runAgent(
-                                context = context,
-                                instruction = inputText,
-                                onNeedConfirm = { action, reason, callback ->
-                                    pendingAction = action
-                                    pendingReason = reason
-                                    onConfirmResult = callback
-                                    showConfirmDialog = true
-                                },
-                                onUpdate = { step, msg, done, success ->
-                                    currentStep = step
-                                    statusMessage = msg
-                                    if (done) {
-                                        isRunning = false
-                                        activeEngine = null
-                                        history.add(0, "${if (success) "✅" else "❌"} ${inputText.take(30)} — $msg")
-                                        inputText = ""
-                                    }
-                                }
-                            )
-                            activeEngine = engine
-                        }
+                        val task = inputText
+                        inputText = ""
+                        startTask(task)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = inputText.isNotBlank()
                 ) {
                     Text("执行")
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // ── 应用列表入口：打开任意已安装应用 / 让 Agent 在应用内干活 ──
+                OutlinedButton(
+                    onClick = { context.startActivity(Intent(context, AppListActivity::class.java)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("📱 打开应用…（领克/微信等）", fontSize = 14.sp)
                 }
             }
 

@@ -137,6 +137,19 @@ class AgentAccessibilityService : AccessibilityService() {
     fun goHome() = performGlobalAction(GLOBAL_ACTION_HOME)
     fun goRecents() = performGlobalAction(GLOBAL_ACTION_RECENTS)
 
+    /** 通过包名打开应用（Agent 的 open_app 动作） */
+    fun openApp(packageName: String) {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            Log.d(TAG, "openApp: $packageName")
+        } else {
+            Log.w(TAG, "openApp: 未找到包 $packageName，尝试去桌面找图标")
+            goHome()
+        }
+    }
+
     // ──── 获取 UI 树（给 LLM 看的摘要） ────
 
     fun getUiTreeSummary(): String {
